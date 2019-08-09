@@ -1,15 +1,29 @@
 #!/bin/bash
 set -euo pipefail
 
+# This script:
+#  - clones an OCaml repository on GitHub
+#  - upgrades the OCamlformat version to match the currently-installed version
+#  - on confirmation, forks the repository and submits a PR requesting the upgrade
+
+usage () {
+    cat >&2 <<EOF
+$0 [ORG] [REPO]
+EOF
+    exit 1
+}
+
+[ $# -eq 2 ] || usage
+
 command -v hub >/dev/null 2>&1 || { echo >&2 "Missing dependency 'hub'"; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo >&2 "Missing dependency 'jq'"; exit 1; }
 
+ORG="$1"
+REPO="$2"
 VERSION="$(ocamlformat --version)"
-GIT_DIR="/tmp/autoformatted"
 USER=$(hub api user | jq --raw-output ".login")
-ORG="craigfe-alt"
-REPO="autoformat"
 BRANCH="ocamlformat.$VERSION"
+GIT_DIR="/tmp/autoformatted"
 MESSAGE_FILE="/tmp/autoformat_message.md"
 
 cat <<EOF > $MESSAGE_FILE
