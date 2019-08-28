@@ -77,6 +77,7 @@ action "Upgrading ocamlformat.$VERSION_OLD to ocamlformat.$VERSION"
 dune build @fmt --auto-promote --diff-command=- 2>/dev/null || true
 
 git add -u
+git diff --cached HEAD
 git diff --stat --cached HEAD
 echo
 
@@ -113,4 +114,4 @@ echo
 action "Issuing PR to $ORG/$REPO"
 # ------------------------------------------------------------------------------
 
-hub pull-request --file /tmp/message
+hub pull-request --file /tmp/autoformat_message.md
