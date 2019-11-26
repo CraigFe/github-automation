@@ -1,6 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 
+# This script queries the GitHub GraphQLv4 API to aggregate weekly contributions
+# into a JSON blob (includes PRs created/reviewed and issues created). Pass the
+# year and ISO week number as arguments:
+#
+# > contributions_query.sh 20 03
+#
+# Limitations: this script uses an API endpoint that is unable to show private
+# contributions. If any restricted contributions exist in the given week, a
+# warning will be shown.
+# (see: https://github.community/t5/GitHub-API-Development-and/APIv4-feature-request-allow-contributionsCollection-to-include/m-p/39696#M3600)
+
+command -v hub >/dev/null 2>&1 || { echo >&2 "Missing dependency 'hub'"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo >&2 "Missing dependency 'jq'"; exit 1; }
+
+YEAR="$1"
+WEEK="$2"
+
 COLOR_RESET="\033[0m"
 COLOR_RED="\033[0;31m"
 COLOR_GREEN="\033[0;32m"
@@ -21,8 +38,8 @@ function week2date () {
 }
 export -f week2date
 
-FROM="$(week2date $1 $2 1)T00:00:00Z"
-TO="$(week2date $1 $2 7)T23:59:59Z"
+FROM="$(week2date $YEAR $WEEK 1)T00:00:00Z"
+TO="$(week2date $YEAR $WEEK 7)T23:59:59Z"
 
 echo -e "Showing contributions in the range $FROM--$TO"
 
