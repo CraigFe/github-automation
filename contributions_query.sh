@@ -20,9 +20,7 @@ WEEK="$2"
 
 COLOR_RESET="\033[0m"
 COLOR_RED="\033[0;31m"
-COLOR_GREEN="\033[0;32m"
 COLOR_GREENB="\033[1;32m"
-COLOR_PURPLEB="\033[1;35m"
 COLOR_CYAN="\033[0;36m"
 
 function action {
@@ -34,12 +32,12 @@ function week2date () {
     local year=$1
     local week=$2
     local dayofweek=$3
-    date -d "$year-01-01 +$(( $week * 7 + 1 - $(date -d "$year-01-04" +%w ) - 3 )) days -2 days + $dayofweek days" +"%Y-%m-%d"
+    date -d "$year-01-01 +$(( week * 7 + 1 - $(date -d "$year-01-04" +%w ) - 3 )) days -2 days + $dayofweek days" +"%Y-%m-%d"
 }
 export -f week2date
 
-FROM="$(week2date $YEAR $WEEK 1)T00:00:00Z"
-TO="$(week2date $YEAR $WEEK 7)T23:59:59Z"
+FROM="$(week2date "$YEAR" "$WEEK" 1)T00:00:00Z"
+TO="$(week2date "$YEAR" "$WEEK" 7)T23:59:59Z"
 
 echo -e "Showing contributions in the range $FROM--$TO"
 
@@ -96,7 +94,7 @@ query(\$endCursor: String) {
 
 action "PRs opened"
 
-echo $QUERY | jq -r '
+echo "$QUERY" | jq -r '
 .data.viewer.contributionsCollection.pullRequestContributionsByRepository |
   map(
     {
@@ -107,7 +105,7 @@ echo $QUERY | jq -r '
 
 action "Issues opened"
 
-echo $QUERY | jq -r '
+echo "$QUERY" | jq -r '
 .data.viewer.contributionsCollection.issueContributionsByRepository |
   map(
     {
@@ -118,7 +116,7 @@ echo $QUERY | jq -r '
 
 action "PRs reviewed"
 
-echo $QUERY | jq -r '
+echo "$QUERY" | jq -r '
 .data.viewer.contributionsCollection.pullRequestReviewContributionsByRepository |
   map(
     {
@@ -128,8 +126,8 @@ echo $QUERY | jq -r '
   )'
 
 
-PRIVATE_CONTRIBUTIONS=$(echo $QUERY | jq -r '.data.viewer.contributionsCollection.restrictedContributionsCount')
+PRIVATE_CONTRIBUTIONS=$(echo "$QUERY" | jq -r '.data.viewer.contributionsCollection.restrictedContributionsCount')
 
 if [ "$PRIVATE_CONTRIBUTIONS" != "0" ]; then
-    echo -e "\nWARNING: unable to show $PRIVATE_CONTRIBUTIONS private contributions\n"
+    echo -e "\n${COLOR_RED}WARNING${COLOR_RESET}: unable to show $PRIVATE_CONTRIBUTIONS private contributions\n"
 fi
