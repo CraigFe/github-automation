@@ -22,7 +22,7 @@ COLOR_RESET="\033[0m"
 COLOR_RED="\033[0;31m"
 
 function emit_warning {
-    echo -e "\n${COLOR_RED}WARNING${COLOR_RESET}: ${1}\n"
+    >&2 echo -e "\n${COLOR_RED}WARNING${COLOR_RESET}: ${1}\n"
 }
 
 function week2date () {
@@ -37,9 +37,9 @@ export -f week2date
 FROM="$(week2date "$YEAR" "$WEEK" 1)T00:00:00Z"
 TO="$(week2date "$YEAR" "$WEEK" 7)T23:59:59Z"
 
-echo -e "Showing contributions in the range $FROM--$TO"
+>&2 echo -e "Showing contributions in the range $FROM--$TO"
 
-QUERY=$(hub api --paginate graphql -f query="
+RESULT=$(hub api --paginate graphql -f query="
 query(\$endCursor: String) {
   viewer {
     contributionsCollection(from: \"$FROM\", to: \"$TO\") {
@@ -90,7 +90,7 @@ query(\$endCursor: String) {
   }
 }")
 
-echo "$QUERY" | jq -r '
+echo "$RESULT" | jq -r '
 .data.viewer.contributionsCollection |
   {
     pullRequestsOpened: .pullRequestContributionsByRepository |
@@ -112,7 +112,7 @@ echo "$QUERY" | jq -r '
       })
   }'
 
-PRIVATE_CONTRIBUTIONS=$(echo "$QUERY" | jq -r '.data.viewer.contributionsCollection.restrictedContributionsCount')
+PRIVATE_CONTRIBUTIONS=$(echo "$RESULT" | jq -r '.data.viewer.contributionsCollection.restrictedContributionsCount')
 
 if [ "$PRIVATE_CONTRIBUTIONS" != "0" ]; then
     emit_warning "unable to show $PRIVATE_CONTRIBUTIONS private contributions"
