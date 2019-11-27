@@ -20,11 +20,9 @@ WEEK="$2"
 
 COLOR_RESET="\033[0m"
 COLOR_RED="\033[0;31m"
-COLOR_GREENB="\033[1;32m"
-COLOR_CYAN="\033[0;36m"
 
-function action {
-    echo -e "\n$COLOR_CYAN<><><><> $COLOR_GREENB${1}$COLOR_CYAN <><><><>$COLOR_RESET\n"
+function emit_warning {
+    echo -e "\n${COLOR_RED}WARNING${COLOR_RESET}: ${1}\n"
 }
 
 function week2date () {
@@ -92,42 +90,30 @@ query(\$endCursor: String) {
   }
 }")
 
-action "PRs opened"
-
 echo "$QUERY" | jq -r '
-.data.viewer.contributionsCollection.pullRequestContributionsByRepository |
-  map(
-    {
-      repo: .repository.nameWithOwner,
-      contributions: .contributions.nodes | map(.pullRequest)
-    }
-  )'
+.data.viewer.contributionsCollection |
+  {
+    pullRequestsOpened: .pullRequestContributionsByRepository |
+      map({
+        repo: .repository.nameWithOwner,
+        contributions: .contributions.nodes | map(.pullRequest)
+      }),
 
-action "Issues opened"
+    issuesOpened: .issueContributionsByRepository |
+      map({
+        repo: .repository.nameWithOwner,
+        contributions: .contributions.nodes | map(.issue)
+      }),
 
-echo "$QUERY" | jq -r '
-.data.viewer.contributionsCollection.issueContributionsByRepository |
-  map(
-    {
-      repo: .repository.nameWithOwner,
-      contributions: .contributions.nodes | map(.issue)
-    }
-  )'
-
-action "PRs reviewed"
-
-echo "$QUERY" | jq -r '
-.data.viewer.contributionsCollection.pullRequestReviewContributionsByRepository |
-  map(
-    {
-      repo: .repository.nameWithOwner,
-      contributions: .contributions.nodes | map(.pullRequest)
-    }
-  )'
-
+    pullRequestsReviewed: .pullRequestReviewContributionsByRepository |
+      map({
+        repo: .repository.nameWithOwner,
+        contributions: .contributions.nodes | map(.pullRequest)
+      })
+  }'
 
 PRIVATE_CONTRIBUTIONS=$(echo "$QUERY" | jq -r '.data.viewer.contributionsCollection.restrictedContributionsCount')
 
 if [ "$PRIVATE_CONTRIBUTIONS" != "0" ]; then
-    echo -e "\n${COLOR_RED}WARNING${COLOR_RESET}: unable to show $PRIVATE_CONTRIBUTIONS private contributions\n"
+    emit_warning "unable to show $PRIVATE_CONTRIBUTIONS private contributions"
 fi
