@@ -1,0 +1,86 @@
+#!/bin/bash
+set -euo pipefail
+
+# This script rebuilds all failing OCaml-CI jobs for a particular commit in the
+# current repository. Either pass a specific PR number to rebuild from:
+#
+# > rebuild 42   # Rebuild failures for PR #42
+#
+# or let the script infer the corresponding PR from the `git' HEAD:
+#
+# > rebuild      # Rebuild failures for the latest `git' commit
+
+COLOR_RESET="\033[0m"
+COLOR_CYAN="\033[0;36m"
+
+git rev-parse 2>/dev/null || (>&2 echo "Error: not inside a Git repository"; exit 1)
+
+# Select a remote URL using heuristics (`upstream` → `origin` → <sole-remote>)
+function infer_remote {
+    REMOTES=$(git remote -v | grep 'fetch')
+
+    case "$(echo "$REMOTES" | wc -l)" in
+        0) >&2 echo "No remotes detected"; exit 1;;
+        1) REMOTE_LINE="$REMOTES";;
+        *) REMOTE_LINE=$(echo "$REMOTES" | grep -E -- '^(upstream|origin)' | sort | tail -n 1);;
+    esac
+
+    if [ -z "$REMOTE_LINE" ]; then
+        >&2 echo "Could not infer an upstream remote"
+        exit 1
+    fi
+
+    echo "$REMOTE_LINE"
+}
+
+REMOTE_LINE=$(infer_remote)
+
+REMOTE=$(echo "$REMOTE_LINE" | cut -f 1)
+URL=$(
+    echo "$REMOTE_LINE" |\
+        # Extract URL and convert `git@` URLS to `https://` equivalents
+        cut -f 2 |\
+            cut -d' ' -f 1 |\
+            sed '/^git@.*/{ s/:/\//; s/^git@/https:\/\//; s/.git$// }')
+
+
+ORG=$(echo "$URL" | cut -d/ -f4)
+REPO=$(echo "$URL" | cut -d/ -f5)
+
+PURPOSE="Rebuilding failing jobs on \`${COLOR_CYAN}${ORG}/${REPO}${COLOR_RESET}'"
+
+if [ $# -eq 0 ]; then
+    COMMIT=$(git rev-parse HEAD)
+    printf "%b for commit \`${COLOR_CYAN}%.8b${COLOR_RESET}' ...\n\n" "${PURPOSE}" "$COMMIT"
+else
+    COMMIT=$(git ls-remote --refs "$REMOTE" "refs/pull/$1/head" | cut -f 1)
+
+    if [ -z "$COMMIT" ]; then
+        >&2 echo "Could not get commit hash for PR $1"
+        exit 1
+    fi
+
+    printf "${PURPOSE} for PR \`${COLOR_CYAN}${1}${COLOR_RESET}' (commit: \`${COLOR_CYAN}%.8s${COLOR_RESET}') ...\n\n" "$COMMIT"
+fi
+
+URL="https://ci.ocamllabs.io/github/${ORG}/${REPO}/commit/${COMMIT}"
+
+VARIANTS=$(curl --silent --show-error --connect-timeout 5 "$URL" | grep -oP '<li class="failed">[[:space:]]*<a href="\K[^"]*variant[^"]*' || [[ $? == 1 ]])
+
+rebuild_variant() {
+    RESPONSE=$(curl --silent --show-error --form submit=Rebuild "https://ci.ocamllabs.io$1/rebuild")
+    VARIANT=$(echo "$1" | grep -oP '(?<=variant/)[^/]*')
+    SUCCESS="\e[32mSUCCESS\e[0m"
+
+    printf "%-25s:  ${RESPONSE:-$SUCCESS}\n" "$VARIANT"
+}
+export -f rebuild_variant
+
+if [ "$VARIANTS" = "" ]; then
+    RESULT="No failing jobs"
+else
+    echo "$VARIANTS" | sort | xargs --max-procs=8 --max-args=1 --delimiter=$'\n' bash -c 'rebuild_variant "$@"' _
+    RESULT="\nDone"
+fi
+
+echo -e "${RESULT}. See \`${COLOR_CYAN}${URL}${COLOR_RESET}'."
